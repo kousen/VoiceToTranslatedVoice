@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -21,14 +20,9 @@ public class AllTogether {
     private final AssemblyAITranscribeService assemblyAITranscribe = new AssemblyAITranscribeService();
     private final LibreTranslateService libreTranslate = new LibreTranslateService();
     private final ElevenLabsService elevenLabs = new ElevenLabsService();
-    private final Set<Language> supportedLanguages;
-
-    public AllTogether() {
-        this.supportedLanguages = libreTranslate.getSupportedLanguages();
-    }
 
     public void run(List<String> languageCodes) throws IOException {
-        Set<Language> targetLanguages = validateLanguages(languageCodes);
+        Set<Language> targetLanguages = libreTranslate.validateLanguages(languageCodes);
         logger.fine("Starting application with languages: " +
                 targetLanguages.stream()
                         .map(Language::name)
@@ -48,20 +42,6 @@ public class AllTogether {
         logger.info("Transcription successful. Text: " + transcribedText);
         translateAndGenerateSpeech(languageCodes, transcribedText);
         logger.info("All processing completed successfully");
-    }
-
-    private Set<Language> validateLanguages(List<String> languageCodes) {
-        return languageCodes.stream()
-                .map(this::findLanguageByCode)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.toSet());
-    }
-
-    private Optional<Language> findLanguageByCode(String code) {
-        return supportedLanguages.stream()
-                .filter(lang -> lang.code().equals(code))
-                .findFirst();
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")

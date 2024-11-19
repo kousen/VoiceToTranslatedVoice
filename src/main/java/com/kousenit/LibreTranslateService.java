@@ -17,6 +17,8 @@ public class LibreTranslateService {
 
     private final Set<Language> languages;
     private final Set<String> supportedTargetLanguages;
+    private final Set<Language> supportedLanguages;
+
     private final Gson gson = new Gson();
 
     public record TranslateRequest(String source, String target, String q) {}
@@ -26,6 +28,7 @@ public class LibreTranslateService {
     public LibreTranslateService() {
         this.languages = fetchLanguages();
         this.supportedTargetLanguages = fetchSupportedLanguages();
+        this.supportedLanguages = getSupportedLanguages();
     }
 
     private Set<Language> fetchLanguages() {
@@ -35,9 +38,8 @@ public class LibreTranslateService {
                     .GET()
                     .build();
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            Type listType = new TypeToken<ArrayList<Language>>(){}.getType();
-            List<Language> languageList = gson.fromJson(response.body(), listType);
-            return new HashSet<>(languageList);
+            Type setType = new TypeToken<HashSet<Language>>(){}.getType();
+            return gson.fromJson(response.body(), setType);
         } catch (Exception e) {
             throw new RuntimeException("Failed to fetch languages", e);
         }
@@ -47,6 +49,20 @@ public class LibreTranslateService {
         return languages.stream()
                 .flatMap(lang -> lang.targets().stream())
                 .collect(Collectors.toSet());
+    }
+
+    public Set<Language> validateLanguages(List<String> languageCodes) {
+        return languageCodes.stream()
+                .map(this::findLanguageByCode)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .collect(Collectors.toSet());
+    }
+
+    public Optional<Language> findLanguageByCode(String code) {
+        return supportedLanguages.stream()
+                .filter(lang -> lang.code().equals(code))
+                .findFirst();
     }
 
     public Set<Language> getSupportedLanguages() {
