@@ -15,9 +15,8 @@ import java.util.stream.Collectors;
 public class LibreTranslateService {
     private final static String LOCAL_TRANSLATE_URL = "http://localhost:5001/translate";
 
-    private final Set<Language> languages;
-    private final Set<String> supportedTargetLanguages;
-    private final Set<Language> supportedLanguages;
+    private final Set<Language> availableLanguages;
+    private final Set<String> supportedTargetCodes;
 
     private final Gson gson = new Gson();
 
@@ -26,12 +25,11 @@ public class LibreTranslateService {
     public record Language(String code, String name, List<String> targets) {}
 
     public LibreTranslateService() {
-        this.languages = fetchLanguages();
-        this.supportedTargetLanguages = fetchSupportedLanguages();
-        this.supportedLanguages = getSupportedLanguages();
+        this.availableLanguages = fetchLanguagesFromService();
+        this.supportedTargetCodes = extractSupportedTargetCodes();
     }
 
-    private Set<Language> fetchLanguages() {
+    private Set<Language> fetchLanguagesFromService() {
         try (var httpClient = HttpClient.newHttpClient()) {
             var request = HttpRequest.newBuilder()
                     .uri(URI.create(getTranslateUrl().replace("/translate", "/languages")))
@@ -39,54 +37,28 @@ public class LibreTranslateService {
                     .build();
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             Type setType = new TypeToken<HashSet<Language>>(){}.getType();
-            return gson.fromJson(response.body(), setType);
+            return Collections.unmodifiableSet(gson.fromJson(response.body(), setType));
         } catch (Exception e) {
             throw new RuntimeException("Failed to fetch languages", e);
         }
     }
 
-    private Set<String> fetchSupportedLanguages() {
-        return languages.stream()
+    private Set<String> extractSupportedTargetCodes() {
+        return availableLanguages.stream()
                 .flatMap(lang -> lang.targets().stream())
-                .collect(Collectors.toSet());
-    }
-
-    public Set<Language> validateLanguages(List<String> languageCodes) {
-        return languageCodes.stream()
-                .map(this::findLanguageByCode)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.toSet());
-    }
-
-    public Optional<Language> findLanguageByCode(String code) {
-        return supportedLanguages.stream()
-                .filter(lang -> lang.code().equals(code))
-                .findFirst();
-    }
-
-    public Set<Language> getSupportedLanguages() {
-        return languages;
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public String translate(TranslateRequest request) {
-        if (request.q() == null || request.q().isBlank()) {
-            return "";
-        }
-        if (!supportedTargetLanguages.contains(request.target())) {
-            throw new IllegalArgumentException("Unsupported target language: " + request.target());
-        }
-        if (!supportedTargetLanguages.contains(request.source())) {
-            throw new IllegalArgumentException("Unsupported source language: " + request.source());
-        }
+        validateTranslateRequest(request);
 
-        String text = gson.toJson(request);
+        String requestJson = gson.toJson(request);
         try (var httpClient = HttpClient.newHttpClient()) {
             var httpRequest = HttpRequest.newBuilder()
                     .uri(URI.create(getTranslateUrl()))
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(text))
+                    .POST(HttpRequest.BodyPublishers.ofString(requestJson))
                     .build();
             var response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
 
@@ -94,19 +66,35 @@ public class LibreTranslateService {
                 throw new RuntimeException("Translation failed with HTTP response code: " + response.statusCode());
             }
 
-            try {
-                var json = gson.fromJson(response.body(), TranslateResponse.class);
-                if (json == null || json.translatedText() == null) {
-                    throw new RuntimeException("Failed to parse translation response: null response");
-                }
-                return json.translatedText();
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to parse translation response: " + e.getMessage(), e);
-            }
+            return parseTranslationResponse(response.body());
         } catch (IOException | InterruptedException e) {
             String msg = "Error translating text. Is the local server running?";
             System.err.println(msg);
             throw new RuntimeException(msg, e);
+        }
+    }
+
+    private void validateTranslateRequest(TranslateRequest request) {
+        if (request.q() == null || request.q().isBlank()) {
+            throw new IllegalArgumentException("Translation text cannot be empty");
+        }
+        if (!supportedTargetCodes.contains(request.target())) {
+            throw new IllegalArgumentException("Unsupported target language: " + request.target());
+        }
+        if (!supportedTargetCodes.contains(request.source())) {
+            throw new IllegalArgumentException("Unsupported source language: " + request.source());
+        }
+    }
+
+    private String parseTranslationResponse(String responseBody) {
+        try {
+            var response = gson.fromJson(responseBody, TranslateResponse.class);
+            if (response == null || response.translatedText() == null) {
+                throw new RuntimeException("Failed to parse translation response: null response");
+            }
+            return response.translatedText();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to parse translation response: " + e.getMessage(), e);
         }
     }
 

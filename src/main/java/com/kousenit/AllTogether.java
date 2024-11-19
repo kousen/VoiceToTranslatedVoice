@@ -4,13 +4,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-import static com.kousenit.LibreTranslateService.Language;
 import static com.kousenit.LibreTranslateService.TranslateRequest;
 
 public class AllTogether {
@@ -22,24 +20,18 @@ public class AllTogether {
     private final ElevenLabsService elevenLabs = new ElevenLabsService();
 
     public void run(List<String> languageCodes) throws IOException {
-        Set<Language> targetLanguages = libreTranslate.validateLanguages(languageCodes);
-        logger.fine("Starting application with languages: " +
-                targetLanguages.stream()
-                        .map(Language::name)
-                        .collect(Collectors.joining(", ")));
-
-        logger.info("Initializing audio recording...");
+        // Record audio
         CompletableFuture<InputStream> recordingFuture = recordAudio();
 
-        logger.info("Starting transcription...");
+        // Transcribe audio
         String transcribedText = transcribeAudio(recordingFuture);
-
         if (transcribedText.isBlank()) {
             logger.severe("No text transcribed. Exiting...");
             return;
         }
-
         logger.info("Transcription successful. Text: " + transcribedText);
+
+        // Translate and generate speech
         translateAndGenerateSpeech(languageCodes, transcribedText);
         logger.info("All processing completed successfully");
     }
@@ -58,9 +50,7 @@ public class AllTogether {
 
     private String transcribeAudio(CompletableFuture<InputStream> recordingFuture) {
         try {
-            logger.fine("Waiting for recording future to complete...");
             InputStream audioStream = recordingFuture.join();
-            logger.fine("Recording future completed, starting transcription...");
             String result = assemblyAITranscribe.transcribe(audioStream).orElseThrow();
             logger.info("Transcription completed successfully");
             System.out.println("Transcription: " + result);
@@ -75,7 +65,7 @@ public class AllTogether {
     }
 
     private void translateAndGenerateSpeech(List<String> languages, String transcribedText) {
-        // Step 1: Perform translations in parallel
+        // Perform translations in parallel
         Map<String, String> translations;
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var start = System.currentTimeMillis();
@@ -116,7 +106,7 @@ public class AllTogether {
             throw new RuntimeException(e);
         }
 
-        // Step 2: Generate speech sequentially using the completed translations
+        // Generate speech sequentially using the completed translations
         // Use a thread pool of size 5 because that's our current limit on the subscription
         try (var speechExecutor = Executors.newFixedThreadPool(5)) {
             var start = System.currentTimeMillis();
@@ -149,6 +139,6 @@ public class AllTogether {
     }
 
     public static void main(String[] args) throws IOException {
-        new AllTogether().run(List.of("en", "es", "fr", "de"));
+        new AllTogether().run(List.of("en", "ja", "de"));
     }
 }

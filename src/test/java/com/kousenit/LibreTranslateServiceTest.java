@@ -42,22 +42,6 @@ class LibreTranslateServiceTest {
     }
 
     @Test
-    @DisplayName("Should handle empty text gracefully")
-    void translateEmptyText() {
-        var request = new TranslateRequest("en", "de", "");
-        String result = service.translate(request);
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    @DisplayName("Should handle null text input")
-    void translateNullText() {
-        var request = new TranslateRequest("en", "de", null);
-        String result = service.translate(request);
-        assertThat(result).isEmpty();
-    }
-
-    @Test
     @DisplayName("Should handle special characters")
     void translateWithSpecialCharacters() {
         var request = new TranslateRequest(

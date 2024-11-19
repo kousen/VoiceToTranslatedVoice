@@ -64,14 +64,14 @@ public class AudioRecorder {
 
             // Convert raw data to WAV format after recording is complete
             byte[] audioData = recordingStream.toByteArray();
-            AudioInputStream audioInputStream = new AudioInputStream(
+            var audioInputStream = new AudioInputStream(
                     new ByteArrayInputStream(audioData),
                     audioFormat,
                     audioData.length / audioFormat.getFrameSize()
             );
 
             // Create a new stream for the WAV data
-            ByteArrayOutputStream wavStream = new ByteArrayOutputStream();
+            var wavStream = new ByteArrayOutputStream();
             AudioSystem.write(audioInputStream, AudioFileFormat.Type.WAVE, wavStream);
 
             // Complete the future with the WAV data
